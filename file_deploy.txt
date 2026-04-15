@@ -1,0 +1,76 @@
+---
+title: "Latihan Deploy RPubs - Analisis Nilai Pesanan Pelanggan Negara Nordic"
+author: "author"
+date: "2026-03-17"
+output:
+  html_document: null
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r loadlibrary}
+# Memuat paket yang diperlukan untuk koneksi database dan visualisasi
+library(DBI)
+library(ggplot2)
+library(scales)
+```
+
+
+# Pendahuluan
+
+Laporan ini menyajikan distribusi nilai pesanan (order value) yang diterima dari pelanggan di negara-negara Nordic. Proses ini mengintegrasikan SQL untuk pengambilan data dan R untuk visualisasi.
+
+# Koneksi Database dan Pengambilan Data
+Langkah pertama adalah membangun koneksi antara RStudio dan database MySQL menggunakan fungsi dbConnect()
+
+```{r koneksidata}
+con <- DBI::dbConnect(odbc::odbc(),
+                      Driver    = "MySQL ODBC 8.0 ANSI Driver", 
+                      Server    = "127.0.0.1",
+                      Database  = "classicmodels",
+                      UID       = "root",
+                      PWD       = "haha", #sesuaikan dg password masing-masing
+                      Port      = 3306)
+
+```
+
+Setelah koneksi terjalin, kita menggunakan blok kode SQL untuk menghitung total nilai setiap pesanan dengan menggabungkan tabel orders, orderdetails, dan customers. Kita menggunakan argumen output.var untuk menyimpan hasil kueri langsung ke dalam data frame R
+
+```{r kueri1}
+# Mendapatkan data yang diperlukan
+dt1 <- dbGetQuery(con, "SELECT 
+    o.orderNumber, 
+    c.country, 
+    SUM(od.quantityOrdered * od.priceEach) AS total_value
+FROM orders o
+JOIN orderdetails od ON o.orderNumber = od.orderNumber
+JOIN customers c ON o.customerNumber = c.customerNumber
+WHERE c.country IN ('Denmark', 'Finland', 'Norway', 'Sweden')
+GROUP BY o.orderNumber")
+
+dt1
+```
+
+# Visualisasi: Histogram Nilai Pesanan
+Kita menggunakan Library ggplot2 untuk membuat histogram. Fungsi geom_histogram() digunakan untuk melihat distribusi frekuensi dari data total value.
+
+```{r histogram}
+# Membuat histogram dengan label yang informatif menggunakan labs()
+
+ggplot(dt1, aes(x = total_value)) +
+  geom_histogram(aes(fill = after_stat(count)), bins = 15, color = "white") +
+  stat_bin(bins = 15, geom = "text", aes(label = after_stat(count)), vjust = -0.5, size = 3) +
+  scale_fill_gradient(low = "#132B43", high = "#56B1F7") +
+  scale_x_continuous(labels = label_dollar()) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  theme_minimal() +
+  labs(title = "Distribusi Nilai Pesanan di Negara Nordic",
+       subtitle = "Negara: Denmark, Finland, Norway, Sweden",
+       x = "Nilai Pesanan (USD)",
+       y = "Frekuensi (Jumlah Order)") +
+  theme(legend.position = "none")
+```
